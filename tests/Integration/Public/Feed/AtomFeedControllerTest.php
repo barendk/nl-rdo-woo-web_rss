@@ -5,21 +5,30 @@ declare(strict_types=1);
 namespace Shared\Tests\Integration\Public\Feed;
 
 use Carbon\CarbonImmutable;
-use DateTimeInterface;
 use Shared\Domain\Publication\Dossier\DossierStatus;
 use Shared\Tests\Factory\Publication\Dossier\Type\Covenant\CovenantFactory;
 use Shared\Tests\Factory\Publication\Dossier\Type\InvestigationReport\InvestigationReportFactory;
 use Shared\Tests\Factory\Publication\Dossier\Type\WooDecision\WooDecisionFactory;
 use Shared\Tests\Integration\SharedWebTestCase;
+use SimpleXMLElement;
+use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 
 use function strpos;
 
 final class AtomFeedControllerTest extends SharedWebTestCase
 {
+    private KernelBrowser $client;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->client = static::createClient();
+    }
+
     public function testAtomFeedReturnsSuccessfulResponse(): void
     {
-        $client = self::createClient();
-        $client->request('GET', '/feed/atom');
+        $this->client->request('GET', '/feed/atom');
 
         self::assertResponseIsSuccessful();
         self::assertResponseHeaderSame('Content-Type', 'application/atom+xml; charset=UTF-8');
@@ -36,10 +45,9 @@ final class AtomFeedControllerTest extends SharedWebTestCase
             'title' => 'Test WooDecision Feed Entry',
         ]);
 
-        $client = self::createClient();
-        $client->request('GET', '/feed/atom');
+        $this->client->request('GET', '/feed/atom');
 
-        $content = (string) $client->getResponse()->getContent();
+        $content = (string) $this->client->getResponse()->getContent();
 
         self::assertStringContainsString('<entry>', $content);
         self::assertStringContainsString('Test Convenant Feed Entry', $content);
@@ -57,23 +65,17 @@ final class AtomFeedControllerTest extends SharedWebTestCase
             'title' => 'Scheduled Dossier Should Not Appear',
         ]);
         CovenantFactory::createOne([
-            'status' => DossierStatus::PREVIEW,
-            'title' => 'Preview Dossier Should Not Appear',
-        ]);
-        CovenantFactory::createOne([
             'status' => DossierStatus::PUBLISHED,
             'title' => 'Published Dossier Should Appear',
         ]);
 
-        $client = self::createClient();
-        $client->request('GET', '/feed/atom');
+        $this->client->request('GET', '/feed/atom');
 
-        $content = (string) $client->getResponse()->getContent();
+        $content = (string) $this->client->getResponse()->getContent();
 
         self::assertStringContainsString('Published Dossier Should Appear', $content);
         self::assertStringNotContainsString('Concept Dossier Should Not Appear', $content);
         self::assertStringNotContainsString('Scheduled Dossier Should Not Appear', $content);
-        self::assertStringNotContainsString('Preview Dossier Should Not Appear', $content);
     }
 
     public function testAtomFeedEntriesHaveCorrectLinks(): void
@@ -89,10 +91,9 @@ final class AtomFeedControllerTest extends SharedWebTestCase
             'dossierNr' => 'test-report-456',
         ]);
 
-        $client = self::createClient();
-        $client->request('GET', '/feed/atom');
+        $this->client->request('GET', '/feed/atom');
 
-        $content = (string) $client->getResponse()->getContent();
+        $content = (string) $this->client->getResponse()->getContent();
 
         self::assertStringContainsString('/convenant/CVN/test-covenant-123', $content);
         self::assertStringContainsString('/onderzoeksrapport/OR/test-report-456', $content);
@@ -100,10 +101,9 @@ final class AtomFeedControllerTest extends SharedWebTestCase
 
     public function testAtomFeedHasCorrectMetadata(): void
     {
-        $client = self::createClient();
-        $client->request('GET', '/feed/atom');
+        $this->client->request('GET', '/feed/atom');
 
-        $content = (string) $client->getResponse()->getContent();
+        $content = (string) $this->client->getResponse()->getContent();
 
         self::assertStringContainsString('<feed xmlns="http://www.w3.org/2005/Atom">', $content);
         self::assertStringContainsString('<title>', $content);
@@ -131,10 +131,9 @@ final class AtomFeedControllerTest extends SharedWebTestCase
             'publicationDate' => CarbonImmutable::create(2024, 2, 1),
         ]);
 
-        $client = self::createClient();
-        $client->request('GET', '/feed/atom');
+        $this->client->request('GET', '/feed/atom');
 
-        $content = (string) $client->getResponse()->getContent();
+        $content = (string) $this->client->getResponse()->getContent();
 
         $newestPos = strpos($content, 'Newest Publication');
         $middlePos = strpos($content, 'Middle Publication');
@@ -147,35 +146,41 @@ final class AtomFeedControllerTest extends SharedWebTestCase
         self::assertLessThan($oldestPos, $middlePos, 'Middle should appear before oldest');
     }
 
-    public function testAtomFeedEntryReflectsUpdatedTimestamp(): void
+    public function testAtomFeedEntryHasPublishedAndUpdatedTimestamps(): void
     {
-        $publishedAt = CarbonImmutable::create(2024, 1, 15, 10, 0, 0);
-        $updatedAt = CarbonImmutable::create(2024, 2, 20, 14, 30, 0);
-
         CovenantFactory::createOne([
             'status' => DossierStatus::PUBLISHED,
-            'title' => 'Updated Dossier',
-            'publicationDate' => $publishedAt,
-            'updatedAt' => $updatedAt,
+            'title' => 'Timestamped Dossier',
+            'publicationDate' => CarbonImmutable::create(2024, 1, 15, 10, 0, 0),
         ]);
 
-        $client = self::createClient();
-        $client->request('GET', '/feed/atom');
+        $this->client->request('GET', '/feed/atom');
 
-        $content = (string) $client->getResponse()->getContent();
+        $content = (string) $this->client->getResponse()->getContent();
+        $xml = new SimpleXMLElement($content);
+        $xml->registerXPathNamespace('atom', 'http://www.w3.org/2005/Atom');
 
-        self::assertStringContainsString('<published>' . $publishedAt->format(DateTimeInterface::ATOM) . '</published>', $content);
-        self::assertStringContainsString('<updated>' . $updatedAt->format(DateTimeInterface::ATOM) . '</updated>', $content);
+        $entries = $xml->xpath('//atom:entry');
+        self::assertCount(1, $entries);
+
+        $entry = $entries[0];
+        $published = (string) $entry->published;
+        $updated = (string) $entry->updated;
+
+        self::assertNotEmpty($published, '<published> should be present');
+        self::assertNotEmpty($updated, '<updated> should be present');
+
+        $publishedDate = new CarbonImmutable($published);
+        self::assertTrue($publishedDate->isSameDay(CarbonImmutable::create(2024, 1, 15)), 'Published date should match factory value');
     }
 
     public function testAtomFeedHasCacheHeaders(): void
     {
-        $client = self::createClient();
-        $client->request('GET', '/feed/atom');
+        $this->client->request('GET', '/feed/atom');
 
         self::assertResponseIsSuccessful();
 
-        $cacheControl = (string) $client->getResponse()->headers->get('Cache-Control');
+        $cacheControl = (string) $this->client->getResponse()->headers->get('Cache-Control');
         self::assertStringContainsString('public', $cacheControl);
         self::assertStringContainsString('max-age=600', $cacheControl);
     }

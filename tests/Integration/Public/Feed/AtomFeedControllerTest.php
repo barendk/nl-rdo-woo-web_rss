@@ -111,6 +111,9 @@ final class AtomFeedControllerTest extends SharedWebTestCase
         self::assertStringContainsString('<link rel="self"', $content);
         self::assertStringContainsString('/feed/atom', $content);
         self::assertStringContainsString('<updated>', $content);
+        self::assertStringContainsString('<author>', $content);
+        self::assertStringContainsString('<name>', $content);
+        self::assertStringContainsString('<link rel="alternate" type="text/html"', $content);
     }
 
     public function testAtomFeedEntriesAreOrderedByPublicationDateDescending(): void

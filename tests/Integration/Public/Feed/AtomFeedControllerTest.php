@@ -177,6 +177,57 @@ final class AtomFeedControllerTest extends SharedWebTestCase
         self::assertTrue($publishedDate->isSameDay(CarbonImmutable::create(2024, 1, 15)), 'Published date should match factory value');
     }
 
+    public function testAtomFeedUpdatedReflectsMostRecentlyUpdatedEntry(): void
+    {
+        CarbonImmutable::setTestNow(CarbonImmutable::create(2024, 6, 1, 12, 0, 0));
+        CovenantFactory::createOne([
+            'status' => DossierStatus::PUBLISHED,
+            'title' => 'Recently updated, older publication',
+            'publicationDate' => CarbonImmutable::create(2024, 1, 1),
+        ]);
+
+        CarbonImmutable::setTestNow(CarbonImmutable::create(2024, 5, 1, 12, 0, 0));
+        CovenantFactory::createOne([
+            'status' => DossierStatus::PUBLISHED,
+            'title' => 'Newest publication, rarely updated',
+            'publicationDate' => CarbonImmutable::create(2024, 5, 1),
+        ]);
+
+        CarbonImmutable::setTestNow();
+
+        $this->client->request('GET', '/feed/atom');
+
+        $content = (string) $this->client->getResponse()->getContent();
+        $xml = new SimpleXMLElement($content);
+        $xml->registerXPathNamespace('atom', 'http://www.w3.org/2005/Atom');
+
+        $feedUpdated = $xml->xpath('/atom:feed/atom:updated');
+        self::assertNotFalse($feedUpdated);
+        self::assertCount(1, $feedUpdated);
+
+        $feedUpdatedDate = new CarbonImmutable((string) $feedUpdated[0]);
+        self::assertTrue(
+            $feedUpdatedDate->isSameDay(CarbonImmutable::create(2024, 6, 1)),
+            'Feed <updated> should reflect the most recently updated entry, not the most recently published one',
+        );
+    }
+
+    public function testAtomFeedAuthorNameUsesSiteName(): void
+    {
+        $this->client->request('GET', '/feed/atom');
+
+        $content = (string) $this->client->getResponse()->getContent();
+        $xml = new SimpleXMLElement($content);
+        $xml->registerXPathNamespace('atom', 'http://www.w3.org/2005/Atom');
+
+        $authorNames = $xml->xpath('/atom:feed/atom:author/atom:name');
+        self::assertNotFalse($authorNames);
+        self::assertCount(1, $authorNames);
+
+        $expectedSiteName = static::getContainer()->getParameter('site_name');
+        self::assertSame($expectedSiteName, (string) $authorNames[0]);
+    }
+
     public function testAtomFeedHasCacheHeaders(): void
     {
         $this->client->request('GET', '/feed/atom');

@@ -5,13 +5,9 @@
     <link rel="self" type="application/atom+xml" href="{{ url('app_feed_atom') }}" />
     <link rel="alternate" type="text/html" href="{{ url('app_home') }}" />
     <author>
-        <name>{{ organisation_name | default('Open Overheid') }}</name>
+        <name>{{ SITE_NAME }}</name>
     </author>
-{% if dossiers is not empty %}
-    <updated>{{ dossiers|first.updatedAt|date("Y-m-d\\TH:i:sP") }}</updated>
-{% else %}
-    <updated>{{ "now"|date("Y-m-d\\TH:i:sP") }}</updated>
-{% endif %}
+    <updated>{{ feedUpdatedAt|date("Y-m-d\\TH:i:sP") }}</updated>
 {% for dossier in dossiers %}
     <entry>
         <title>{{ dossier.title|e }}</title>

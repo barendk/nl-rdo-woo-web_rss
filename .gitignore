@@ -49,4 +49,3 @@ hashes.json
 lib/
 reports
 compose.override.yml
-typescript

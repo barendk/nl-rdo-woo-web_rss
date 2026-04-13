@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+    <title>Publicaties</title>
+    <id>{{ url('app_feed_atom') }}</id>
+    <link rel="self" type="application/atom+xml" href="{{ url('app_feed_atom') }}" />
+    <link rel="alternate" type="text/html" href="{{ url('app_home') }}" />
+    <author>
+        <name>{{ SITE_NAME }}</name>
+    </author>
+    <updated>{{ feedUpdatedAt|date("Y-m-d\\TH:i:sP") }}</updated>
+{% for dossier in dossiers %}
+    <entry>
+        <title>{{ dossier.title|e }}</title>
+        <id>urn:uuid:{{ dossier.id }}</id>
+        <link rel="alternate" type="text/html" href="{{ url('app_' ~ dossier.type.valueForRouteName ~ '_detail', {prefix: dossier.documentPrefix, dossierId: dossier.dossierNr}) }}" />
+        <published>{{ dossier.publicationDate|date("Y-m-d\\TH:i:sP") }}</published>
+        <updated>{{ dossier.updatedAt|date("Y-m-d\\TH:i:sP") }}</updated>
+        <summary>{{ dossier.summary|e }}</summary>
+    </entry>
+{% endfor %}
+</feed>
